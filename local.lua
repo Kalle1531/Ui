@@ -24,7 +24,431 @@ local DefaultTheme = {
     BorderSize = 1
 }
 
--- Utility functions
+local KeySystem = {
+    Enabled = false,
+    ValidKeys = {},
+    AdminKeys = {},
+    AuthenticatedUsers = {},
+    LockedTabs = {},
+    LockedFeatures = {},
+    AuthenticationRequired = true,
+    MaxAttempts = 3,
+    CurrentAttempts = 0,
+    OnAuthSuccess = nil,
+    OnAuthFailed = nil,
+    OnMaxAttemptsReached = nil
+}
+
+-- Key System Functions
+function KeySystem:Initialize(config)
+    if not config then return end
+    
+    self.Enabled = config.Enabled or false
+    self.ValidKeys = config.ValidKeys or {}
+    self.AdminKeys = config.AdminKeys or {}
+    self.MaxAttempts = config.MaxAttempts or 3
+    self.AuthenticationRequired = config.AuthenticationRequired ~= false
+    
+    -- Callbacks
+    self.OnAuthSuccess = config.OnAuthSuccess
+    self.OnAuthFailed = config.OnAuthFailed
+    self.OnMaxAttemptsReached = config.OnMaxAttemptsReached
+    
+    -- Reset attempts
+    self.CurrentAttempts = 0
+    
+    print("[KeySystem] Initialized with", #self.ValidKeys, "valid keys and", #self.AdminKeys, "admin keys")
+end
+
+function KeySystem:AddValidKey(key)
+    if not key or key == "" then return false end
+    
+    for _, existingKey in pairs(self.ValidKeys) do
+        if existingKey == key then
+            return false
+        end
+    end
+    
+    table.insert(self.ValidKeys, key)
+    print("[KeySystem] Added valid key:", key)
+    return true
+end
+
+function KeySystem:RemoveValidKey(key)
+    for i, existingKey in pairs(self.ValidKeys) do
+        if existingKey == key then
+            table.remove(self.ValidKeys, i)
+            print("[KeySystem] Removed valid key:", key)
+            return true
+        end
+    end
+    return false
+end
+
+function KeySystem:AddAdminKey(key)
+    if not key or key == "" then return false end
+    
+    for _, existingKey in pairs(self.AdminKeys) do
+        if existingKey == key then
+            return false
+        end
+    end
+    
+    table.insert(self.AdminKeys, key)
+    print("[KeySystem] Added admin key:", key)
+    return true
+end
+
+function KeySystem:ValidateKey(key)
+    if not self.Enabled then return true end
+    
+    for _, validKey in pairs(self.ValidKeys) do
+        if validKey == key then
+            return true, "valid"
+        end
+    end
+    
+    for _, adminKey in pairs(self.AdminKeys) do
+        if adminKey == key then
+            return true, "admin"
+        end
+    end
+    
+    return false, "invalid"
+end
+
+function KeySystem:AuthenticateUser(key)
+    local isValid, keyType = self:ValidateKey(key)
+    
+    if isValid then
+        self.AuthenticatedUsers[LocalPlayer.UserId] = {
+            keyType = keyType,
+            timestamp = tick(),
+            key = key
+        }
+        
+        self.CurrentAttempts = 0
+        
+        if self.OnAuthSuccess then
+            self.OnAuthSuccess(keyType)
+        end
+        
+        return true, keyType
+    else
+        self.CurrentAttempts = self.CurrentAttempts + 1
+        
+        if self.OnAuthFailed then
+            self.OnAuthFailed(self.CurrentAttempts, self.MaxAttempts)
+        end
+        
+        if self.CurrentAttempts >= self.MaxAttempts then
+            if self.OnMaxAttemptsReached then
+                self.OnMaxAttemptsReached()
+            end
+        end
+        
+        return false, "invalid"
+    end
+end
+
+function KeySystem:IsUserAuthenticated()
+    if not self.Enabled then return true end
+    return self.AuthenticatedUsers[LocalPlayer.UserId] ~= nil
+end
+
+function KeySystem:IsUserAdmin()
+    if not self.Enabled then return false end
+    local userAuth = self.AuthenticatedUsers[LocalPlayer.UserId]
+    return userAuth and userAuth.keyType == "admin"
+end
+
+function KeySystem:LockTab(tabName)
+    self.LockedTabs[tabName] = true
+    print("[KeySystem] Locked tab:", tabName)
+end
+
+function KeySystem:UnlockTab(tabName)
+    self.LockedTabs[tabName] = nil
+    print("[KeySystem] Unlocked tab:", tabName)
+end
+
+function KeySystem:IsTabLocked(tabName)
+    if not self.Enabled then return false end
+    return self.LockedTabs[tabName] == true
+end
+
+function KeySystem:LockFeature(featureName)
+    self.LockedFeatures[featureName] = true
+    print("[KeySystem] Locked feature:", featureName)
+end
+
+function KeySystem:UnlockFeature(featureName)
+    self.LockedFeatures[featureName] = nil
+    print("[KeySystem] Unlocked feature:", featureName)
+end
+
+function KeySystem:IsFeatureLocked(featureName)
+    if not self.Enabled then return false end
+    return self.LockedFeatures[featureName] == true
+end
+
+function KeySystem:GetUserInfo()
+    if not self.Enabled then return nil end
+    return self.AuthenticatedUsers[LocalPlayer.UserId]
+end
+
+function KeySystem:Logout()
+    self.AuthenticatedUsers[LocalPlayer.UserId] = nil
+    self.CurrentAttempts = 0
+    print("[KeySystem] User logged out")
+end
+
+function KeySystem:GetStats()
+    return {
+        Enabled = self.Enabled,
+        ValidKeysCount = #self.ValidKeys,
+        AdminKeysCount = #self.AdminKeys,
+        AuthenticatedUsers = self.AuthenticatedUsers,
+        LockedTabs = self.LockedTabs,
+        LockedFeatures = self.LockedFeatures,
+        CurrentAttempts = self.CurrentAttempts,
+        MaxAttempts = self.MaxAttempts
+    }
+end
+
+local AuthUI = {
+    CurrentAuthGui = nil,
+    IsAuthenticating = false
+}
+
+function AuthUI:CreateAuthenticationPrompt(onSuccess, onFailed, onMaxAttempts)
+    if self.IsAuthenticating then return end
+    self.IsAuthenticating = true
+    
+    local authGui = Instance.new("ScreenGui")
+    authGui.Name = "AuthenticationPrompt"
+    authGui.ResetOnSpawn = false
+    authGui.DisplayOrder = 1000
+    authGui.Parent = PlayerGui
+    
+    self.CurrentAuthGui = authGui
+    
+    local overlay = Instance.new("Frame")
+    overlay.Size = UDim2.new(1, 0, 1, 0)
+    overlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    overlay.BackgroundTransparency = 0.5
+    overlay.BorderSizePixel = 0
+    overlay.Parent = authGui
+    
+    local authFrame = Instance.new("Frame")
+    authFrame.Size = UDim2.new(0, 400, 0, 250)
+    authFrame.Position = UDim2.new(0.5, -200, 0.5, -125)
+    authFrame.BackgroundColor3 = DefaultTheme.BackgroundColor
+    authFrame.BorderSizePixel = 0
+    authFrame.Parent = authGui
+    
+    CreateCorner(DefaultTheme.CornerRadius):Clone().Parent = authFrame
+    CreateStroke(DefaultTheme.PrimaryColor, 2):Clone().Parent = authFrame
+    
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, -20, 0, 40)
+    title.Position = UDim2.new(0, 10, 0, 10)
+    title.BackgroundTransparency = 1
+    title.Text = "🔐 Authentication Required"
+    title.TextColor3 = DefaultTheme.TextColor
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 18
+    title.TextXAlignment = Enum.TextXAlignment.Center
+    title.Parent = authFrame
+
+    local description = Instance.new("TextLabel")
+    description.Size = UDim2.new(1, -20, 0, 30)
+    description.Position = UDim2.new(0, 10, 0, 55)
+    description.BackgroundTransparency = 1
+    description.Text = "Please enter your access key to continue"
+    description.TextColor3 = Color3.fromRGB(200, 200, 200)
+    description.Font = DefaultTheme.Font
+    description.TextSize = 14
+    description.TextXAlignment = Enum.TextXAlignment.Center
+    description.Parent = authFrame
+
+    local keyInput = Instance.new("TextBox")
+    keyInput.Size = UDim2.new(1, -40, 0, 35)
+    keyInput.Position = UDim2.new(0, 20, 0, 100)
+    keyInput.BackgroundColor3 = DefaultTheme.SecondaryColor
+    keyInput.BorderSizePixel = 0
+    keyInput.Text = ""
+    keyInput.PlaceholderText = "Enter your key here..."
+    keyInput.TextColor3 = DefaultTheme.TextColor
+    keyInput.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
+    keyInput.Font = DefaultTheme.Font
+    keyInput.TextSize = 14
+    keyInput.ClearTextOnFocus = false
+    keyInput.Parent = authFrame
+    
+    CreateCorner(DefaultTheme.CornerRadius):Clone().Parent = keyInput
+
+    local statusLabel = Instance.new("TextLabel")
+    statusLabel.Size = UDim2.new(1, -20, 0, 20)
+    statusLabel.Position = UDim2.new(0, 10, 0, 145)
+    statusLabel.BackgroundTransparency = 1
+    statusLabel.Text = ""
+    statusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+    statusLabel.Font = DefaultTheme.Font
+    statusLabel.TextSize = 12
+    statusLabel.TextXAlignment = Enum.TextXAlignment.Center
+    statusLabel.Parent = authFrame
+
+    local buttonsFrame = Instance.new("Frame")
+    buttonsFrame.Size = UDim2.new(1, -20, 0, 35)
+    buttonsFrame.Position = UDim2.new(0, 10, 1, -50)
+    buttonsFrame.BackgroundTransparency = 1
+    buttonsFrame.Parent = authFrame
+    
+    -- Submit button
+    local submitButton = Instance.new("TextButton")
+    submitButton.Size = UDim2.new(0.48, 0, 1, 0)
+    submitButton.Position = UDim2.new(0, 0, 0, 0)
+    submitButton.BackgroundColor3 = DefaultTheme.PrimaryColor
+    submitButton.BorderSizePixel = 0
+    submitButton.Text = "Submit"
+    submitButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    submitButton.Font = Enum.Font.GothamBold
+    submitButton.TextSize = 14
+    submitButton.Parent = buttonsFrame
+    
+    CreateCorner(DefaultTheme.CornerRadius):Clone().Parent = submitButton
+    
+    -- Cancel button
+    local cancelButton = Instance.new("TextButton")
+    cancelButton.Size = UDim2.new(0.48, 0, 1, 0)
+    cancelButton.Position = UDim2.new(0.52, 0, 0, 0)
+    cancelButton.BackgroundColor3 = Color3.fromRGB(255, 85, 85)
+    cancelButton.BorderSizePixel = 0
+    cancelButton.Text = "Cancel"
+    cancelButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    cancelButton.Font = Enum.Font.GothamBold
+    cancelButton.TextSize = 14
+    cancelButton.Parent = buttonsFrame
+    
+    CreateCorner(DefaultTheme.CornerRadius):Clone().Parent = cancelButton
+    
+    -- Attempts counter
+    local attemptsLabel = Instance.new("TextLabel")
+    attemptsLabel.Size = UDim2.new(1, -20, 0, 15)
+    attemptsLabel.Position = UDim2.new(0, 10, 1, -20)
+    attemptsLabel.BackgroundTransparency = 1
+    attemptsLabel.Text = "Attempts: " .. KeySystem.CurrentAttempts .. "/" .. KeySystem.MaxAttempts
+    attemptsLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+    attemptsLabel.Font = DefaultTheme.Font
+    attemptsLabel.TextSize = 10
+    attemptsLabel.TextXAlignment = Enum.TextXAlignment.Center
+    attemptsLabel.Parent = authFrame
+    
+    -- Animation
+    authFrame.Position = UDim2.new(0.5, -200, 0.5, -200)
+    TweenObject(authFrame, {Position = UDim2.new(0.5, -200, 0.5, -125)}, 0.5, Enum.EasingStyle.Back)
+    
+    -- Focus on input
+    keyInput:CaptureFocus()
+    
+    -- Submit function
+    local function submitKey()
+        local key = keyInput.Text
+        if key == "" then
+            statusLabel.Text = "Please enter a key"
+            statusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+            return
+        end
+        
+        local success, keyType = KeySystem:AuthenticateUser(key)
+        
+        if success then
+            statusLabel.Text = "✓ Authentication successful!"
+            statusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+            
+            if onSuccess then onSuccess(keyType) end
+            
+            -- Close with animation
+            TweenObject(authFrame, {Position = UDim2.new(0.5, -200, 0.5, -200)}, 0.3)
+            wait(0.5)
+            self:CloseAuthenticationPrompt()
+        else
+            statusLabel.Text = "✗ Invalid key! (" .. KeySystem.CurrentAttempts .. "/" .. KeySystem.MaxAttempts .. ")"
+            statusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+            attemptsLabel.Text = "Attempts: " .. KeySystem.CurrentAttempts .. "/" .. KeySystem.MaxAttempts
+            
+            -- Shake animation
+            TweenObject(authFrame, {Position = UDim2.new(0.5, -190, 0.5, -125)}, 0.1)
+            wait(0.1)
+            TweenObject(authFrame, {Position = UDim2.new(0.5, -210, 0.5, -125)}, 0.1)
+            wait(0.1)
+            TweenObject(authFrame, {Position = UDim2.new(0.5, -200, 0.5, -125)}, 0.1)
+            
+            keyInput.Text = ""
+            keyInput:CaptureFocus()
+            
+            if onFailed then onFailed(KeySystem.CurrentAttempts, KeySystem.MaxAttempts) end
+            
+            if KeySystem.CurrentAttempts >= KeySystem.MaxAttempts then
+                statusLabel.Text = "✗ Maximum attempts reached!"
+                submitButton.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+                submitButton.Active = false
+                keyInput.Active = false
+                
+                if onMaxAttempts then onMaxAttempts() end
+                
+                wait(2)
+                self:CloseAuthenticationPrompt()
+            end
+        end
+    end
+    
+    -- Event connections
+    submitButton.MouseButton1Click:Connect(submitKey)
+    keyInput.FocusLost:Connect(function(enterPressed)
+        if enterPressed then submitKey() end
+    end)
+    
+    cancelButton.MouseButton1Click:Connect(function()
+        self:CloseAuthenticationPrompt()
+        if onFailed then onFailed(KeySystem.CurrentAttempts, KeySystem.MaxAttempts) end
+    end)
+    
+    -- Button hover effects
+    submitButton.MouseEnter:Connect(function()
+        if submitButton.Active then
+            TweenObject(submitButton, {BackgroundColor3 = Color3.fromRGB(DefaultTheme.PrimaryColor.R * 255 * 0.8, DefaultTheme.PrimaryColor.G * 255 * 0.8, DefaultTheme.PrimaryColor.B * 255 * 0.8)}, 0.2)
+        end
+    end)
+    
+    submitButton.MouseLeave:Connect(function()
+        if submitButton.Active then
+            TweenObject(submitButton, {BackgroundColor3 = DefaultTheme.PrimaryColor}, 0.2)
+        end
+    end)
+    
+    cancelButton.MouseEnter:Connect(function()
+        TweenObject(cancelButton, {BackgroundColor3 = Color3.fromRGB(200, 60, 60)}, 0.2)
+    end)
+    
+    cancelButton.MouseLeave:Connect(function()
+        TweenObject(cancelButton, {BackgroundColor3 = Color3.fromRGB(255, 85, 85)}, 0.2)
+    end)
+end
+
+function AuthUI:CloseAuthenticationPrompt()
+    if self.CurrentAuthGui then
+        self.CurrentAuthGui:Destroy()
+        self.CurrentAuthGui = nil
+    end
+    self.IsAuthenticating = false
+end
+
+function AuthUI:IsAuthenticating()
+    return self.IsAuthenticating
+end
+
 local function CreateCorner(radius)
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, radius or DefaultTheme.CornerRadius)
@@ -48,7 +472,6 @@ local function TweenObject(object, properties, duration, easingStyle, easingDire
     return tween
 end
 
--- Tooltip system
 local TooltipGui = nil
 local TooltipFrame = nil
 
@@ -123,7 +546,6 @@ local function ShowTooltip(text, targetFrame)
     TooltipFrame.Position = UDim2.new(0, xPos, 0, yPos)
     TooltipFrame.Visible = true
     
-    -- Fade in animation
     TooltipFrame.BackgroundTransparency = 1
     tooltipText.TextTransparency = 1
     
@@ -136,7 +558,6 @@ local function HideTooltip()
     
     local tooltipText = TooltipFrame:FindFirstChild("Text")
     
-    -- Fade out animation
     TweenObject(TooltipFrame, {BackgroundTransparency = 1}, 0.15)
     TweenObject(tooltipText, {TextTransparency = 1}, 0.15)
     
@@ -149,14 +570,11 @@ local function HideTooltip()
 end
 
 local function AddTooltipToElement(element, tooltipText)
-    -- Find the interactive element within the component
     local interactiveElement = element
     
-    -- Check if the element has mouse events, if not find a child that does
     local hasMouseEvents = pcall(function() return element.MouseEnter end)
     
     if not hasMouseEvents then
-        -- Look for interactive children (TextButton, ImageButton, etc.)
         for _, child in pairs(element:GetDescendants()) do
             if child:IsA("TextButton") or child:IsA("ImageButton") or child:IsA("TextBox") then
                 interactiveElement = child
@@ -204,18 +622,95 @@ local function AddTooltipToElement(element, tooltipText)
     return element
 end
 
--- Helper function to create component wrapper with WithTooltip method
-local function CreateComponentWrapper(element)
-    return {
+local function CreateComponentWrapper(element, featureName)
+    local wrapper = {
         Element = element,
+        FeatureName = featureName,
         WithTooltip = function(self, tooltipText)
             AddTooltipToElement(element, tooltipText)
             return self
+        end,
+        LockFeature = function(self)
+            if self.FeatureName then
+                KeySystem:LockFeature(self.FeatureName)
+                if element:IsA("TextButton") or element:IsA("ImageButton") then
+                    element.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+                    element.TextColor3 = Color3.fromRGB(120, 120, 120)
+                elseif element:IsA("Frame") then
+                    element.BackgroundTransparency = 0.5
+                    for _, child in pairs(element:GetDescendants()) do
+                        if child:IsA("TextLabel") or child:IsA("TextButton") then
+                            child.TextTransparency = 0.5
+                        end
+                    end
+                end
+            end
+            return self
+        end,
+        UnlockFeature = function(self)
+            if self.FeatureName then
+                KeySystem:UnlockFeature(self.FeatureName)
+                if element:IsA("TextButton") or element:IsA("ImageButton") then
+                    element.BackgroundColor3 = DefaultTheme.SecondaryColor
+                    element.TextColor3 = DefaultTheme.TextColor
+                elseif element:IsA("Frame") then
+                    element.BackgroundTransparency = 0
+                    for _, child in pairs(element:GetDescendants()) do
+                        if child:IsA("TextLabel") or child:IsA("TextButton") then
+                            child.TextTransparency = 0
+                        end
+                    end
+                end
+            end
+            return self
+        end,
+        IsLocked = function(self)
+            return self.FeatureName and KeySystem:IsFeatureLocked(self.FeatureName)
         end
     }
+
+    if element:IsA("TextButton") or element:IsA("ImageButton") then
+        local originalCallback = nil
+
+        local connections = getconnections and getconnections(element.MouseButton1Click) or {}
+        if #connections > 0 then
+            originalCallback = connections[1].Function
+        end
+
+        element.MouseButton1Click:Connect(function()
+            if featureName and KeySystem:IsFeatureLocked(featureName) and not KeySystem:IsUserAuthenticated() then
+                Library:ShowAuthenticationPrompt(
+                    function(keyType)
+                        Library:Notify({
+                            Title = "Feature Unlocked",
+                            Text = "You now have access to this feature.",
+                            Duration = 3
+                        })
+                        if originalCallback then originalCallback() end
+                    end,
+                    function(attempts, maxAttempts)
+                        Library:Notify({
+                            Title = "Access Denied",
+                            Text = "Invalid key for this feature.",
+                            Duration = 3
+                        })
+                    end,
+                    function()
+                        Library:Notify({
+                            Title = "Access Blocked",
+                            Text = "Maximum attempts reached.",
+                            Duration = 5
+                        })
+                    end
+                )
+                return
+            end
+        end)
+    end
+    
+    return wrapper
 end
 
--- Window class
 local Window = {}
 Window.__index = Window
 
@@ -223,7 +718,6 @@ function Window:CreateTab(name)
     local Tab = {}
     Tab.__index = Tab
     
-    -- Create tab button
     local tabButton = Instance.new("TextButton")
     tabButton.Name = name
     tabButton.Size = UDim2.new(0, 120, 0, 30)
@@ -237,7 +731,6 @@ function Window:CreateTab(name)
     
     CreateCorner(self.Theme.CornerRadius):Clone().Parent = tabButton
     
-    -- Create tab content frame
     local tabContent = Instance.new("ScrollingFrame")
     tabContent.Name = name .. "Content"
     tabContent.Size = UDim2.new(1, 0, 1, 0)
@@ -250,23 +743,46 @@ function Window:CreateTab(name)
     tabContent.Visible = false
     tabContent.Parent = self.ContentFrame
     
-    -- Layout for tab content
     local layout = Instance.new("UIListLayout")
     layout.SortOrder = Enum.SortOrder.LayoutOrder
     layout.Padding = UDim.new(0, 5)
     layout.Parent = tabContent
     
-    -- Auto-resize canvas
     layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
         tabContent.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 10)
     end)
     
-    -- Tab switching logic
     tabButton.MouseButton1Click:Connect(function()
-        self:SwitchTab(name)
+        if KeySystem:IsTabLocked(name) and not KeySystem:IsUserAuthenticated() then
+            Library:ShowAuthenticationPrompt(
+                function(keyType)
+                    Library:Notify({
+                        Title = "Access Granted",
+                        Text = "Welcome! You now have " .. keyType .. " access.",
+                        Duration = 3
+                    })
+                    self:SwitchTab(name)
+                end,
+                function(attempts, maxAttempts)
+                    Library:Notify({
+                        Title = "Access Denied",
+                        Text = "Invalid key. Attempts: " .. attempts .. "/" .. maxAttempts,
+                        Duration = 3
+                    })
+                end,
+                function()
+                    Library:Notify({
+                        Title = "Access Blocked",
+                        Text = "Maximum attempts reached. Access denied.",
+                        Duration = 5
+                    })
+                end
+            )
+        else
+            self:SwitchTab(name)
+        end
     end)
     
-    -- Hover effects
     tabButton.MouseEnter:Connect(function()
         TweenObject(tabButton, {BackgroundColor3 = self.Theme.PrimaryColor}, 0.2)
     end)
@@ -277,21 +793,18 @@ function Window:CreateTab(name)
         end
     end)
     
-    -- Store tab data
     self.Tabs[name] = {
         Button = tabButton,
         Content = tabContent,
         ElementCount = 0
     }
     
-    -- Set as active if first tab
     if #self.TabOrder == 0 then
         self:SwitchTab(name)
     end
     
     table.insert(self.TabOrder, name)
     
-    -- Tab methods
     function Tab:CreateButton(text, callback)
         local button = Instance.new("TextButton")
         button.Size = UDim2.new(1, -10, 0, 35)
@@ -306,7 +819,6 @@ function Window:CreateTab(name)
         
         CreateCorner(self.Theme.CornerRadius):Clone().Parent = button
         
-        -- Button effects
         button.MouseEnter:Connect(function()
             TweenObject(button, {BackgroundColor3 = self.Theme.PrimaryColor}, 0.2)
         end)
@@ -745,7 +1257,6 @@ function Window:CreateTab(name)
             pickerTitle.TextXAlignment = Enum.TextXAlignment.Left
             pickerTitle.Parent = colorPickerFrame
             
-            -- Close button
             local pickerClose = Instance.new("TextButton")
             pickerClose.Size = UDim2.new(0, 20, 0, 20)
             pickerClose.Position = UDim2.new(1, -25, 0, 5)
@@ -759,7 +1270,6 @@ function Window:CreateTab(name)
             
             CreateCorner(10):Clone().Parent = pickerClose
             
-            -- RGB Sliders
             local function createRGBSlider(colorName, colorIndex, yPos)
                 local sliderFrame = Instance.new("Frame")
                 sliderFrame.Size = UDim2.new(1, -20, 0, 30)
@@ -992,6 +1502,74 @@ function Library:Notify(config)
             closeNotification()
         end
     end)
+end
+
+-- Library Key System Integration
+function Library:InitializeKeySystem(config)
+    KeySystem:Initialize(config)
+    return self
+end
+
+function Library:ShowAuthenticationPrompt(onSuccess, onFailed, onMaxAttempts)
+    if not KeySystem.Enabled then
+        if onSuccess then onSuccess("bypass") end
+        return
+    end
+    
+    if KeySystem:IsUserAuthenticated() then
+        if onSuccess then onSuccess(KeySystem:GetUserInfo().keyType) end
+        return
+    end
+    
+    AuthUI:CreateAuthenticationPrompt(onSuccess, onFailed, onMaxAttempts)
+end
+
+function Library:AddValidKey(key)
+    return KeySystem:AddValidKey(key)
+end
+
+function Library:RemoveValidKey(key)
+    return KeySystem:RemoveValidKey(key)
+end
+
+function Library:AddAdminKey(key)
+    return KeySystem:AddAdminKey(key)
+end
+
+function Library:IsUserAuthenticated()
+    return KeySystem:IsUserAuthenticated()
+end
+
+function Library:IsUserAdmin()
+    return KeySystem:IsUserAdmin()
+end
+
+function Library:GetUserInfo()
+    return KeySystem:GetUserInfo()
+end
+
+function Library:LockTab(tabName)
+    KeySystem:LockTab(tabName)
+end
+
+function Library:UnlockTab(tabName)
+    KeySystem:UnlockTab(tabName)
+end
+
+function Library:LockFeature(featureName)
+    KeySystem:LockFeature(featureName)
+end
+
+function Library:UnlockFeature(featureName)
+    KeySystem:UnlockFeature(featureName)
+end
+
+function Library:LogoutUser()
+    KeySystem:Logout()
+end
+
+function Library:GetKeySystemStats()
+    return KeySystem:GetStats()
 end
 
 -- Library main functions
