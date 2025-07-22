@@ -48,6 +48,145 @@ local function TweenObject(object, properties, duration, easingStyle, easingDire
     return tween
 end
 
+-- Tooltip system
+local TooltipGui = nil
+local TooltipFrame = nil
+
+local function CreateTooltipSystem()
+    if TooltipGui then return end
+    
+    TooltipGui = Instance.new("ScreenGui")
+    TooltipGui.Name = "TooltipSystem"
+    TooltipGui.ResetOnSpawn = false
+    TooltipGui.DisplayOrder = 999
+    TooltipGui.Parent = PlayerGui
+    
+    TooltipFrame = Instance.new("Frame")
+    TooltipFrame.Name = "Tooltip"
+    TooltipFrame.Size = UDim2.new(0, 200, 0, 30)
+    TooltipFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    TooltipFrame.BorderSizePixel = 0
+    TooltipFrame.Visible = false
+    TooltipFrame.ZIndex = 1000
+    TooltipFrame.Parent = TooltipGui
+    
+    CreateCorner(4):Clone().Parent = TooltipFrame
+    CreateStroke(Color3.fromRGB(100, 100, 100), 1):Clone().Parent = TooltipFrame
+    
+    local tooltipText = Instance.new("TextLabel")
+    tooltipText.Name = "Text"
+    tooltipText.Size = UDim2.new(1, -10, 1, 0)
+    tooltipText.Position = UDim2.new(0, 5, 0, 0)
+    tooltipText.BackgroundTransparency = 1
+    tooltipText.Text = ""
+    tooltipText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    tooltipText.Font = Enum.Font.Gotham
+    tooltipText.TextSize = 12
+    tooltipText.TextXAlignment = Enum.TextXAlignment.Left
+    tooltipText.TextWrapped = true
+    tooltipText.Parent = TooltipFrame
+end
+
+local function ShowTooltip(text, targetFrame)
+    CreateTooltipSystem()
+    
+    local tooltipText = TooltipFrame:FindFirstChild("Text")
+    tooltipText.Text = text
+    
+    -- Calculate text size
+    local textService = game:GetService("TextService")
+    local textSize = textService:GetTextSize(
+        text,
+        12,
+        Enum.Font.Gotham,
+        Vector2.new(300, math.huge)
+    )
+    
+    -- Adjust tooltip size
+    TooltipFrame.Size = UDim2.new(0, math.max(textSize.X + 15, 100), 0, math.max(textSize.Y + 10, 25))
+    
+    -- Position tooltip near mouse
+    local mouse = UserInputService:GetMouseLocation()
+    local screenSize = workspace.CurrentCamera.ViewportSize
+    
+    local xPos = mouse.X + 10
+    local yPos = mouse.Y - TooltipFrame.AbsoluteSize.Y - 10
+    
+    -- Keep tooltip on screen
+    if xPos + TooltipFrame.AbsoluteSize.X > screenSize.X then
+        xPos = mouse.X - TooltipFrame.AbsoluteSize.X - 10
+    end
+    if yPos < 0 then
+        yPos = mouse.Y + 10
+    end
+    
+    TooltipFrame.Position = UDim2.new(0, xPos, 0, yPos)
+    TooltipFrame.Visible = true
+    
+    -- Fade in animation
+    TooltipFrame.BackgroundTransparency = 1
+    tooltipText.TextTransparency = 1
+    
+    TweenObject(TooltipFrame, {BackgroundTransparency = 0.1}, 0.2)
+    TweenObject(tooltipText, {TextTransparency = 0}, 0.2)
+end
+
+local function HideTooltip()
+    if not TooltipFrame then return end
+    
+    local tooltipText = TooltipFrame:FindFirstChild("Text")
+    
+    -- Fade out animation
+    TweenObject(TooltipFrame, {BackgroundTransparency = 1}, 0.15)
+    TweenObject(tooltipText, {TextTransparency = 1}, 0.15)
+    
+    spawn(function()
+        wait(0.15)
+        if TooltipFrame then
+            TooltipFrame.Visible = false
+        end
+    end)
+end
+
+local function AddTooltipToElement(element, tooltipText)
+    local connections = {}
+    
+    -- Mouse enter
+    connections[#connections + 1] = element.MouseEnter:Connect(function()
+        ShowTooltip(tooltipText, element)
+    end)
+    
+    -- Mouse leave
+    connections[#connections + 1] = element.MouseLeave:Connect(function()
+        HideTooltip()
+    end)
+    
+    -- Store connections for cleanup
+    if not element:GetAttribute("TooltipConnections") then
+        element:SetAttribute("TooltipConnections", true)
+        element.AncestryChanged:Connect(function()
+            if not element.Parent then
+                for _, connection in pairs(connections) do
+                    connection:Disconnect()
+                end
+            end
+        end)
+    end
+    
+    return element
+end
+
+-- Helper function to create component wrapper with WithTooltip method
+local function CreateComponentWrapper(element)
+    return {
+        Element = element,
+        WithTooltip = function(self, tooltipText)
+            AddTooltipToElement(element, tooltipText)
+            return self
+        end
+    }
+end
+
 -- Window class
 local Window = {}
 Window.__index = Window
@@ -156,7 +295,7 @@ function Window:CreateTab(name)
         end)
         
         self.Tabs[name].ElementCount = self.Tabs[name].ElementCount + 1
-        return button
+        return CreateComponentWrapper(button)
     end
     
     function Tab:CreateToggle(text, default, callback)
@@ -216,7 +355,7 @@ function Window:CreateTab(name)
         end)
         
         self.Tabs[name].ElementCount = self.Tabs[name].ElementCount + 1
-        return toggleFrame
+        return CreateComponentWrapper(toggleFrame)
     end
     
     function Tab:CreateSlider(text, min, max, default, callback)
@@ -309,7 +448,7 @@ function Window:CreateTab(name)
         end)
         
         self.Tabs[name].ElementCount = self.Tabs[name].ElementCount + 1
-        return sliderFrame
+        return CreateComponentWrapper(sliderFrame)
     end
     
     function Tab:CreateDropdown(text, options, callback)
@@ -397,7 +536,7 @@ function Window:CreateTab(name)
         end)
         
         self.Tabs[name].ElementCount = self.Tabs[name].ElementCount + 1
-        return dropdownFrame
+        return CreateComponentWrapper(dropdownFrame)
     end
     
     function Tab:CreateTextbox(text, placeholder, callback)
@@ -444,7 +583,7 @@ function Window:CreateTab(name)
         end)
         
         self.Tabs[name].ElementCount = self.Tabs[name].ElementCount + 1
-        return textboxFrame
+        return CreateComponentWrapper(textboxFrame)
     end
     
     function Tab:CreateKeybind(text, defaultKey, callback)
@@ -506,7 +645,7 @@ function Window:CreateTab(name)
         end)
         
         self.Tabs[name].ElementCount = self.Tabs[name].ElementCount + 1
-        return keybindFrame
+        return CreateComponentWrapper(keybindFrame)
     end
     
     -- Add color picker functionality
@@ -716,7 +855,7 @@ function Window:CreateTab(name)
         end)
         
         self.Tabs[name].ElementCount = self.Tabs[name].ElementCount + 1
-        return colorFrame
+        return CreateComponentWrapper(colorFrame)
     end
     
     setmetatable(Tab, {__index = self})
