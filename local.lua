@@ -1026,7 +1026,7 @@ function Window:CreateTab(name)
         CreateCorner(self.Theme.CornerRadius):Clone().Parent = dropdownButton
         
         local dropdownList = Instance.new("Frame")
-        dropdownList.Size = UDim2.new(0, dropdownButton.AbsoluteSize.X, 0, #options * 25)
+        dropdownList.Size = UDim2.new(0, 150, 0, #options * 25) -- Start with fixed width
         dropdownList.BackgroundColor3 = self.Theme.BackgroundColor
         dropdownList.BorderSizePixel = 0
         dropdownList.Visible = false
@@ -1038,28 +1038,41 @@ function Window:CreateTab(name)
         
         local listLayout = Instance.new("UIListLayout")
         listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        listLayout.FillDirection = Enum.FillDirection.Vertical
+        listLayout.Padding = UDim.new(0, 0)
         listLayout.Parent = dropdownList
         
         local selectedValue = options[1]
         
+        print("[Dropdown] Creating dropdown with", #options, "options")
+        print("[Dropdown] List size:", dropdownList.Size)
+        
         for i, option in ipairs(options) do
             local optionButton = Instance.new("TextButton")
             optionButton.Size = UDim2.new(1, 0, 0, 25)
-            optionButton.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+            optionButton.BackgroundColor3 = Color3.fromRGB(55, 55, 55)
             optionButton.BorderSizePixel = 0
             optionButton.Text = option
-            optionButton.TextColor3 = self.Theme.TextColor
+            optionButton.TextColor3 = Color3.fromRGB(255, 255, 255) -- Ensure white text
             optionButton.Font = self.Theme.Font
-            optionButton.TextSize = 12
+            optionButton.TextSize = 14
+            optionButton.TextStrokeTransparency = 0.8
+            optionButton.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
             optionButton.LayoutOrder = i
             optionButton.Parent = dropdownList
+            
+            -- Add border for better visibility
+            local stroke = CreateStroke(Color3.fromRGB(80, 80, 80), 1)
+            stroke.Parent = optionButton
+            
+            print("[Dropdown] Created button", i, ":", option, "Size:", optionButton.Size)
             
             optionButton.MouseEnter:Connect(function()
                 TweenObject(optionButton, {BackgroundColor3 = self.Theme.PrimaryColor}, 0.2)
             end)
             
             optionButton.MouseLeave:Connect(function()
-                TweenObject(optionButton, {BackgroundColor3 = Color3.fromRGB(45, 45, 45)}, 0.2)
+                TweenObject(optionButton, {BackgroundColor3 = Color3.fromRGB(55, 55, 55)}, 0.2)
             end)
             
             optionButton.MouseButton1Click:Connect(function()
