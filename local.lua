@@ -149,15 +149,43 @@ local function HideTooltip()
 end
 
 local function AddTooltipToElement(element, tooltipText)
+    -- Find the interactive element within the component
+    local interactiveElement = element
+    
+    -- Check if the element has mouse events, if not find a child that does
+    local hasMouseEvents = pcall(function() return element.MouseEnter end)
+    
+    if not hasMouseEvents then
+        -- Look for interactive children (TextButton, ImageButton, etc.)
+        for _, child in pairs(element:GetDescendants()) do
+            if child:IsA("TextButton") or child:IsA("ImageButton") or child:IsA("TextBox") then
+                interactiveElement = child
+                break
+            end
+        end
+        
+        -- If still no interactive element found, make the main element interactive
+        if not pcall(function() return interactiveElement.MouseEnter end) then
+            -- Create an invisible button overlay for tooltip detection
+            local overlay = Instance.new("TextButton")
+            overlay.Size = UDim2.new(1, 0, 1, 0)
+            overlay.BackgroundTransparency = 1
+            overlay.Text = ""
+            overlay.ZIndex = element.ZIndex + 1
+            overlay.Parent = element
+            interactiveElement = overlay
+        end
+    end
+    
     local connections = {}
     
     -- Mouse enter
-    connections[#connections + 1] = element.MouseEnter:Connect(function()
+    connections[#connections + 1] = interactiveElement.MouseEnter:Connect(function()
         ShowTooltip(tooltipText, element)
     end)
     
     -- Mouse leave
-    connections[#connections + 1] = element.MouseLeave:Connect(function()
+    connections[#connections + 1] = interactiveElement.MouseLeave:Connect(function()
         HideTooltip()
     end)
     
