@@ -1587,6 +1587,50 @@ function Library:CreateWindow(config)
             AuthenticationRequired = true
         })
         
+        -- Create a window object that will be populated after authentication
+        local window = setmetatable({}, Window)
+        window.Authenticated = false
+        window.PendingTabs = {}
+        window.Config = config
+        
+        -- Override CreateTab to queue tabs until authenticated
+        function window:CreateTab(name, icon)
+            if self.Authenticated then
+                -- If authenticated, create tab normally
+                return self.RealWindow:CreateTab(name, icon)
+            else
+                -- Queue the tab creation for after authentication
+                table.insert(self.PendingTabs, {name = name, icon = icon})
+                
+                -- Return a dummy tab object that queues component creation
+                local dummyTab = {
+                    CreateButton = function(_, text, callback) 
+                        return {WithTooltip = function(self, tooltip) return self end}
+                    end,
+                    CreateToggle = function(_, text, default, callback) 
+                        return {WithTooltip = function(self, tooltip) return self end}
+                    end,
+                    CreateSlider = function(_, text, min, max, default, callback) 
+                        return {WithTooltip = function(self, tooltip) return self end}
+                    end,
+                    CreateDropdown = function(_, text, options, callback) 
+                        return {WithTooltip = function(self, tooltip) return self end}
+                    end,
+                    CreateTextbox = function(_, text, placeholder, callback) 
+                        return {WithTooltip = function(self, tooltip) return self end}
+                    end,
+                    CreateKeybind = function(_, text, default, callback) 
+                        return {WithTooltip = function(self, tooltip) return self end}
+                    end,
+                    CreateColorPicker = function(_, text, default, callback) 
+                        return {WithTooltip = function(self, tooltip) return self end}
+                    end
+                }
+                
+                return dummyTab
+            end
+        end
+        
         -- Show key authentication screen
         local function showKeyScreen()
             local keyGui = Instance.new("ScreenGui")
@@ -1724,7 +1768,6 @@ function Library:CreateWindow(config)
                     -- Save key if enabled
                     if keySettings.SaveKey then
                         local fileName = keySettings.FileName or "Key"
-                        -- In a real implementation, you'd save to a file
                         print("[KeySystem] Key saved as:", fileName)
                     end
                     
@@ -1737,8 +1780,16 @@ function Library:CreateWindow(config)
                     wait(0.3)
                     keyGui:Destroy()
                     
-                    -- Now create the actual window
-                    createMainWindow()
+                    -- Now create the real window and mark as authenticated
+                    window.RealWindow = createWindowInternal(config)
+                    window.Authenticated = true
+                    
+                    -- Process any pending tabs
+                    for _, tabData in pairs(window.PendingTabs) do
+                        window.RealWindow:CreateTab(tabData.name, tabData.icon)
+                    end
+                    
+                    print("[KeySystem] Authentication successful! Main UI loaded.")
                 else
                     statusLabel.Text = "Invalid key! Please try again."
                     statusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
@@ -1771,16 +1822,11 @@ function Library:CreateWindow(config)
             end)
         end
         
-        -- Function to create the main window after authentication
-        local function createMainWindow()
-            return createWindowInternal(config)
-        end
-        
-        -- Show key screen first
+        -- Show key screen
         showKeyScreen()
         
-        -- Return a placeholder that will be replaced
-        return {}
+        -- Return the window object (will be functional after authentication)
+        return window
     else
         -- No key system, create window directly
         return createWindowInternal(config)
