@@ -1572,6 +1572,124 @@ function Library:GetKeySystemStats()
     return KeySystem:GetStats()
 end
 
+-- Internal function to create the actual window
+local function createWindowInternal(config)
+    local window = setmetatable({}, Window)
+    
+    -- Apply theme
+    window.Theme = {}
+    for key, value in pairs(DefaultTheme) do
+        window.Theme[key] = (config.Theme and config.Theme[key]) or value
+    end
+    
+    -- Create main ScreenGui
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "UILibrary"
+    screenGui.ResetOnSpawn = false
+    screenGui.Parent = PlayerGui
+    
+    -- Main frame
+    local mainFrame = Instance.new("Frame")
+    mainFrame.Name = "MainFrame"
+    mainFrame.Size = UDim2.new(0, 500, 0, 400)
+    mainFrame.Position = UDim2.new(0.5, -250, 0.5, -200)
+    mainFrame.BackgroundColor3 = window.Theme.BackgroundColor
+    mainFrame.BorderSizePixel = 0
+    mainFrame.Active = true
+    mainFrame.Draggable = true
+    mainFrame.Parent = screenGui
+    
+    CreateCorner(window.Theme.CornerRadius):Clone().Parent = mainFrame
+    CreateStroke(window.Theme.AccentColor, window.Theme.BorderSize):Clone().Parent = mainFrame
+    
+    -- Title bar
+    local titleBar = Instance.new("Frame")
+    titleBar.Name = "TitleBar"
+    titleBar.Size = UDim2.new(1, 0, 0, 40)
+    titleBar.BackgroundColor3 = window.Theme.SecondaryColor
+    titleBar.BorderSizePixel = 0
+    titleBar.Parent = mainFrame
+    
+    CreateCorner(window.Theme.CornerRadius):Clone().Parent = titleBar
+    
+    -- Title text
+    local titleText = Instance.new("TextLabel")
+    titleText.Size = UDim2.new(1, -80, 1, 0)
+    titleText.Position = UDim2.new(0, 10, 0, 0)
+    titleText.BackgroundTransparency = 1
+    titleText.Text = config.Title or "UI Library"
+    titleText.TextColor3 = window.Theme.TextColor
+    titleText.Font = window.Theme.Font
+    titleText.TextSize = 16
+    titleText.TextXAlignment = Enum.TextXAlignment.Left
+    titleText.Parent = titleBar
+    
+    -- Close button
+    local closeButton = Instance.new("TextButton")
+    closeButton.Size = UDim2.new(0, 30, 0, 30)
+    closeButton.Position = UDim2.new(1, -35, 0, 5)
+    closeButton.BackgroundColor3 = Color3.fromRGB(255, 85, 85)
+    closeButton.BorderSizePixel = 0
+    closeButton.Text = "×"
+    closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    closeButton.Font = Enum.Font.GothamBold
+    closeButton.TextSize = 18
+    closeButton.Parent = titleBar
+    
+    CreateCorner(window.Theme.CornerRadius):Clone().Parent = closeButton
+    
+    -- Close button functionality
+    closeButton.MouseButton1Click:Connect(function()
+        screenGui:Destroy()
+    end)
+    
+    -- Tab container
+    local tabContainer = Instance.new("Frame")
+    tabContainer.Name = "TabContainer"
+    tabContainer.Size = UDim2.new(1, 0, 0, 35)
+    tabContainer.Position = UDim2.new(0, 0, 0, 40)
+    tabContainer.BackgroundColor3 = window.Theme.SecondaryColor
+    tabContainer.BorderSizePixel = 0
+    tabContainer.Parent = mainFrame
+    
+    -- Tab list layout
+    local tabListLayout = Instance.new("UIListLayout")
+    tabListLayout.FillDirection = Enum.FillDirection.Horizontal
+    tabListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    tabListLayout.Padding = UDim.new(0, 2)
+    tabListLayout.Parent = tabContainer
+    
+    -- Content container
+    local contentContainer = Instance.new("Frame")
+    contentContainer.Name = "ContentContainer"
+    contentContainer.Size = UDim2.new(1, -20, 1, -85)
+    contentContainer.Position = UDim2.new(0, 10, 0, 75)
+    contentContainer.BackgroundTransparency = 1
+    contentContainer.Parent = mainFrame
+    
+    -- Initialize window properties
+    window.ScreenGui = screenGui
+    window.MainFrame = mainFrame
+    window.TabContainer = tabContainer
+    window.ContentContainer = contentContainer
+    window.Tabs = {}
+    window.TabOrder = {}
+    window.ActiveTab = nil
+    
+    -- Window methods
+    function window:ToggleUI()
+        local visible = not screenGui.Enabled
+        screenGui.Enabled = visible
+        return visible
+    end
+    
+    function window:Destroy()
+        screenGui:Destroy()
+    end
+    
+    return window
+end
+
 -- Library main functions
 function Library:CreateWindow(config)
     -- Handle key system configuration
@@ -1774,17 +1892,14 @@ function Library:CreateWindow(config)
                     -- Authenticate user
                     KeySystem:AuthenticateUser(enteredKey)
                     
-                    -- Close key screen and proceed
                     wait(1)
                     TweenObject(mainFrame, {Position = UDim2.new(0.5, -225, 0.5, -200)}, 0.3)
                     wait(0.3)
                     keyGui:Destroy()
                     
-                    -- Now create the real window and mark as authenticated
                     window.RealWindow = createWindowInternal(config)
                     window.Authenticated = true
                     
-                    -- Process any pending tabs
                     for _, tabData in pairs(window.PendingTabs) do
                         window.RealWindow:CreateTab(tabData.name, tabData.icon)
                     end
@@ -1794,7 +1909,6 @@ function Library:CreateWindow(config)
                     statusLabel.Text = "Invalid key! Please try again."
                     statusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
                     
-                    -- Shake animation
                     TweenObject(mainFrame, {Position = UDim2.new(0.5, -215, 0.5, -150)}, 0.1)
                     wait(0.1)
                     TweenObject(mainFrame, {Position = UDim2.new(0.5, -235, 0.5, -150)}, 0.1)
@@ -1806,13 +1920,11 @@ function Library:CreateWindow(config)
                 end
             end
             
-            -- Event connections
             checkButton.MouseButton1Click:Connect(checkKey)
             keyInput.FocusLost:Connect(function(enterPressed)
                 if enterPressed then checkKey() end
             end)
             
-            -- Button hover effect
             checkButton.MouseEnter:Connect(function()
                 TweenObject(checkButton, {BackgroundColor3 = Color3.fromRGB(0, 140, 220)}, 0.2)
             end)
@@ -1822,152 +1934,14 @@ function Library:CreateWindow(config)
             end)
         end
         
-        -- Show key screen
         showKeyScreen()
         
-        -- Return the window object (will be functional after authentication)
         return window
     else
-        -- No key system, create window directly
         return createWindowInternal(config)
     end
 end
 
--- Internal function to create the actual window
-local function createWindowInternal(config)
-    local window = setmetatable({}, Window)
-    
-    -- Apply theme
-    window.Theme = {}
-    for key, value in pairs(DefaultTheme) do
-        window.Theme[key] = (config.Theme and config.Theme[key]) or value
-    end
-    
-    -- Create main ScreenGui
-    local screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "UILibrary"
-    screenGui.ResetOnSpawn = false
-    screenGui.Parent = PlayerGui
-    
-    -- Main frame
-    local mainFrame = Instance.new("Frame")
-    mainFrame.Name = "MainFrame"
-    mainFrame.Size = UDim2.new(0, 500, 0, 400)
-    mainFrame.Position = UDim2.new(0.5, -250, 0.5, -200)
-    mainFrame.BackgroundColor3 = window.Theme.BackgroundColor
-    mainFrame.BorderSizePixel = 0
-    mainFrame.Active = true
-    mainFrame.Draggable = true
-    mainFrame.Parent = screenGui
-    
-    CreateCorner(window.Theme.CornerRadius):Clone().Parent = mainFrame
-    CreateStroke(window.Theme.AccentColor, window.Theme.BorderSize):Clone().Parent = mainFrame
-    
-    -- Title bar
-    local titleBar = Instance.new("Frame")
-    titleBar.Name = "TitleBar"
-    titleBar.Size = UDim2.new(1, 0, 0, 40)
-    titleBar.BackgroundColor3 = window.Theme.SecondaryColor
-    titleBar.BorderSizePixel = 0
-    titleBar.Parent = mainFrame
-    
-    CreateCorner(window.Theme.CornerRadius):Clone().Parent = titleBar
-    
-    -- Title text
-    local titleText = Instance.new("TextLabel")
-    titleText.Size = UDim2.new(1, -80, 1, 0)
-    titleText.Position = UDim2.new(0, 10, 0, 0)
-    titleText.BackgroundTransparency = 1
-    titleText.Text = config.Title or "UI Library"
-    titleText.TextColor3 = window.Theme.TextColor
-    titleText.Font = window.Theme.Font
-    titleText.TextSize = 16
-    titleText.TextXAlignment = Enum.TextXAlignment.Left
-    titleText.Parent = titleBar
-    
-    -- Close button
-    local closeButton = Instance.new("TextButton")
-    closeButton.Size = UDim2.new(0, 30, 0, 30)
-    closeButton.Position = UDim2.new(1, -35, 0, 5)
-    closeButton.BackgroundColor3 = Color3.fromRGB(255, 85, 85)
-    closeButton.BorderSizePixel = 0
-    closeButton.Text = "×"
-    closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    closeButton.Font = Enum.Font.GothamBold
-    closeButton.TextSize = 18
-    closeButton.Parent = titleBar
-    
-    CreateCorner(window.Theme.CornerRadius):Clone().Parent = closeButton
-    
-    closeButton.MouseButton1Click:Connect(function()
-        screenGui:Destroy()
-    end)
-    
-    -- Description (if provided)
-    local descriptionHeight = 0
-    if config.Description then
-        local description = Instance.new("TextLabel")
-        description.Size = UDim2.new(1, -20, 0, 25)
-        description.Position = UDim2.new(0, 10, 0, 45)
-        description.BackgroundTransparency = 1
-        description.Text = config.Description
-        description.TextColor3 = Color3.fromRGB(200, 200, 200)
-        description.Font = window.Theme.Font
-        description.TextSize = 12
-        description.TextXAlignment = Enum.TextXAlignment.Left
-        description.Parent = mainFrame
-        
-        descriptionHeight = 30
-    end
-    
-    -- Tab container
-    local tabContainer = Instance.new("Frame")
-    tabContainer.Name = "TabContainer"
-    tabContainer.Size = UDim2.new(1, -20, 0, 35)
-    tabContainer.Position = UDim2.new(0, 10, 0, 45 + descriptionHeight)
-    tabContainer.BackgroundTransparency = 1
-    tabContainer.Parent = mainFrame
-    
-    local tabLayout = Instance.new("UIListLayout")
-    tabLayout.FillDirection = Enum.FillDirection.Horizontal
-    tabLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    tabLayout.Padding = UDim.new(0, 5)
-    tabLayout.Parent = tabContainer
-    
-    -- Content frame
-    local contentFrame = Instance.new("Frame")
-    contentFrame.Name = "ContentFrame"
-    contentFrame.Size = UDim2.new(1, -20, 1, -(90 + descriptionHeight))
-    contentFrame.Position = UDim2.new(0, 10, 0, 85 + descriptionHeight)
-    contentFrame.BackgroundTransparency = 1
-    contentFrame.Parent = mainFrame
-    
-    -- Store window properties
-    window.ScreenGui = screenGui
-    window.MainFrame = mainFrame
-    window.TabContainer = tabContainer
-    window.ContentFrame = contentFrame
-    window.Tabs = {}
-    window.TabOrder = {}
-    window.ActiveTab = nil
-    
-    -- Window methods
-    function window:ToggleUI()
-        local visible = not screenGui.Enabled
-        screenGui.Enabled = visible
-        return visible
-    end
-    
-    function window:Destroy()
-        screenGui:Destroy()
-    end
-    
-    return window
-end
-
-
-
--- Add ToggleUI method to Library
 function Library:ToggleUI()
     for _, gui in pairs(PlayerGui:GetChildren()) do
         if gui.Name == "UILibrary" then
