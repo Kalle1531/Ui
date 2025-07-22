@@ -1705,48 +1705,15 @@ function Library:CreateWindow(config)
             AuthenticationRequired = true
         })
         
-        -- Create a window object that will be populated after authentication
-        local window = setmetatable({}, Window)
-        window.Authenticated = false
-        window.PendingTabs = {}
-        window.Config = config
+        -- Variable to store the real window after authentication
+        local realWindow = nil
+        local isAuthenticated = false
         
-        -- Override CreateTab to queue tabs until authenticated
-        function window:CreateTab(name, icon)
-            if self.Authenticated then
-                -- If authenticated, create tab normally
-                return self.RealWindow:CreateTab(name, icon)
-            else
-                -- Queue the tab creation for after authentication
-                table.insert(self.PendingTabs, {name = name, icon = icon})
-                
-                -- Return a dummy tab object that queues component creation
-                local dummyTab = {
-                    CreateButton = function(_, text, callback) 
-                        return {WithTooltip = function(self, tooltip) return self end}
-                    end,
-                    CreateToggle = function(_, text, default, callback) 
-                        return {WithTooltip = function(self, tooltip) return self end}
-                    end,
-                    CreateSlider = function(_, text, min, max, default, callback) 
-                        return {WithTooltip = function(self, tooltip) return self end}
-                    end,
-                    CreateDropdown = function(_, text, options, callback) 
-                        return {WithTooltip = function(self, tooltip) return self end}
-                    end,
-                    CreateTextbox = function(_, text, placeholder, callback) 
-                        return {WithTooltip = function(self, tooltip) return self end}
-                    end,
-                    CreateKeybind = function(_, text, default, callback) 
-                        return {WithTooltip = function(self, tooltip) return self end}
-                    end,
-                    CreateColorPicker = function(_, text, default, callback) 
-                        return {WithTooltip = function(self, tooltip) return self end}
-                    end
-                }
-                
-                return dummyTab
-            end
+        -- Function to create window after authentication
+        local function createRealWindow()
+            realWindow = createWindowInternal(config)
+            isAuthenticated = true
+            return realWindow
         end
         
         -- Show key authentication screen
@@ -1897,12 +1864,8 @@ function Library:CreateWindow(config)
                     wait(0.3)
                     keyGui:Destroy()
                     
-                    window.RealWindow = createWindowInternal(config)
-                    window.Authenticated = true
-                    
-                    for _, tabData in pairs(window.PendingTabs) do
-                        window.RealWindow:CreateTab(tabData.name, tabData.icon)
-                    end
+                    -- Create the real window now that user is authenticated
+                    createRealWindow()
                     
                     print("[KeySystem] Authentication successful! Main UI loaded.")
                 else
@@ -1936,7 +1899,12 @@ function Library:CreateWindow(config)
         
         showKeyScreen()
         
-        return window
+        -- Wait until authentication is complete
+        while not isAuthenticated do
+            wait(0.1)
+        end
+        
+        return realWindow
     else
         return createWindowInternal(config)
     end
