@@ -1574,6 +1574,221 @@ end
 
 -- Library main functions
 function Library:CreateWindow(config)
+    -- Handle key system configuration
+    if config.KeySystem then
+        local keySettings = config.KeySettings or {}
+        
+        -- Initialize key system with settings
+        KeySystem:Initialize({
+            Enabled = true,
+            ValidKeys = keySettings.Key or {"Hello"},
+            AdminKeys = {},
+            MaxAttempts = 3,
+            AuthenticationRequired = true
+        })
+        
+        -- Show key authentication screen
+        local function showKeyScreen()
+            local keyGui = Instance.new("ScreenGui")
+            keyGui.Name = "KeySystemAuth"
+            keyGui.ResetOnSpawn = false
+            keyGui.DisplayOrder = 1001
+            keyGui.Parent = PlayerGui
+            
+            -- Background
+            local background = Instance.new("Frame")
+            background.Size = UDim2.new(1, 0, 1, 0)
+            background.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+            background.BorderSizePixel = 0
+            background.Parent = keyGui
+            
+            -- Main frame
+            local mainFrame = Instance.new("Frame")
+            mainFrame.Size = UDim2.new(0, 450, 0, 300)
+            mainFrame.Position = UDim2.new(0.5, -225, 0.5, -150)
+            mainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+            mainFrame.BorderSizePixel = 0
+            mainFrame.Parent = keyGui
+            
+            CreateCorner(8):Clone().Parent = mainFrame
+            CreateStroke(Color3.fromRGB(60, 60, 60), 1):Clone().Parent = mainFrame
+            
+            -- Title
+            local title = Instance.new("TextLabel")
+            title.Size = UDim2.new(1, -40, 0, 40)
+            title.Position = UDim2.new(0, 20, 0, 20)
+            title.BackgroundTransparency = 1
+            title.Text = keySettings.Title or config.Title or "Key System"
+            title.TextColor3 = Color3.fromRGB(255, 255, 255)
+            title.Font = Enum.Font.GothamBold
+            title.TextSize = 20
+            title.TextXAlignment = Enum.TextXAlignment.Center
+            title.Parent = mainFrame
+            
+            -- Subtitle
+            local subtitle = Instance.new("TextLabel")
+            subtitle.Size = UDim2.new(1, -40, 0, 25)
+            subtitle.Position = UDim2.new(0, 20, 0, 65)
+            subtitle.BackgroundTransparency = 1
+            subtitle.Text = keySettings.Subtitle or "Key System"
+            subtitle.TextColor3 = Color3.fromRGB(200, 200, 200)
+            subtitle.Font = Enum.Font.Gotham
+            subtitle.TextSize = 14
+            subtitle.TextXAlignment = Enum.TextXAlignment.Center
+            subtitle.Parent = mainFrame
+            
+            -- Note
+            local note = Instance.new("TextLabel")
+            note.Size = UDim2.new(1, -40, 0, 40)
+            note.Position = UDim2.new(0, 20, 0, 100)
+            note.BackgroundTransparency = 1
+            note.Text = keySettings.Note or "No method of obtaining the key is provided"
+            note.TextColor3 = Color3.fromRGB(150, 150, 150)
+            note.Font = Enum.Font.Gotham
+            note.TextSize = 12
+            note.TextXAlignment = Enum.TextXAlignment.Center
+            note.TextWrapped = true
+            note.Parent = mainFrame
+            
+            -- Key input
+            local keyInput = Instance.new("TextBox")
+            keyInput.Size = UDim2.new(1, -60, 0, 40)
+            keyInput.Position = UDim2.new(0, 30, 0, 160)
+            keyInput.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+            keyInput.BorderSizePixel = 0
+            keyInput.Text = ""
+            keyInput.PlaceholderText = "Enter your key here..."
+            keyInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+            keyInput.PlaceholderColor3 = Color3.fromRGB(120, 120, 120)
+            keyInput.Font = Enum.Font.Gotham
+            keyInput.TextSize = 14
+            keyInput.ClearTextOnFocus = false
+            keyInput.Parent = mainFrame
+            
+            CreateCorner(6):Clone().Parent = keyInput
+            
+            -- Check key button
+            local checkButton = Instance.new("TextButton")
+            checkButton.Size = UDim2.new(0, 120, 0, 35)
+            checkButton.Position = UDim2.new(0.5, -60, 0, 220)
+            checkButton.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
+            checkButton.BorderSizePixel = 0
+            checkButton.Text = "Check Key"
+            checkButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+            checkButton.Font = Enum.Font.GothamBold
+            checkButton.TextSize = 14
+            checkButton.Parent = mainFrame
+            
+            CreateCorner(6):Clone().Parent = checkButton
+            
+            -- Status label
+            local statusLabel = Instance.new("TextLabel")
+            statusLabel.Size = UDim2.new(1, -40, 0, 20)
+            statusLabel.Position = UDim2.new(0, 20, 0, 270)
+            statusLabel.BackgroundTransparency = 1
+            statusLabel.Text = ""
+            statusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+            statusLabel.Font = Enum.Font.Gotham
+            statusLabel.TextSize = 12
+            statusLabel.TextXAlignment = Enum.TextXAlignment.Center
+            statusLabel.Parent = mainFrame
+            
+            -- Animation
+            mainFrame.Position = UDim2.new(0.5, -225, 0.5, -200)
+            TweenObject(mainFrame, {Position = UDim2.new(0.5, -225, 0.5, -150)}, 0.5, Enum.EasingStyle.Back)
+            
+            -- Focus input
+            keyInput:CaptureFocus()
+            
+            -- Check key function
+            local function checkKey()
+                local enteredKey = keyInput.Text
+                if enteredKey == "" then
+                    statusLabel.Text = "Please enter a key"
+                    statusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+                    return
+                end
+                
+                local isValid = false
+                for _, validKey in pairs(keySettings.Key or {"Hello"}) do
+                    if validKey == enteredKey then
+                        isValid = true
+                        break
+                    end
+                end
+                
+                if isValid then
+                    statusLabel.Text = "Authentication successful!"
+                    statusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+                    
+                    -- Save key if enabled
+                    if keySettings.SaveKey then
+                        local fileName = keySettings.FileName or "Key"
+                        -- In a real implementation, you'd save to a file
+                        print("[KeySystem] Key saved as:", fileName)
+                    end
+                    
+                    -- Authenticate user
+                    KeySystem:AuthenticateUser(enteredKey)
+                    
+                    -- Close key screen and proceed
+                    wait(1)
+                    TweenObject(mainFrame, {Position = UDim2.new(0.5, -225, 0.5, -200)}, 0.3)
+                    wait(0.3)
+                    keyGui:Destroy()
+                    
+                    -- Now create the actual window
+                    createMainWindow()
+                else
+                    statusLabel.Text = "Invalid key! Please try again."
+                    statusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+                    
+                    -- Shake animation
+                    TweenObject(mainFrame, {Position = UDim2.new(0.5, -215, 0.5, -150)}, 0.1)
+                    wait(0.1)
+                    TweenObject(mainFrame, {Position = UDim2.new(0.5, -235, 0.5, -150)}, 0.1)
+                    wait(0.1)
+                    TweenObject(mainFrame, {Position = UDim2.new(0.5, -225, 0.5, -150)}, 0.1)
+                    
+                    keyInput.Text = ""
+                    keyInput:CaptureFocus()
+                end
+            end
+            
+            -- Event connections
+            checkButton.MouseButton1Click:Connect(checkKey)
+            keyInput.FocusLost:Connect(function(enterPressed)
+                if enterPressed then checkKey() end
+            end)
+            
+            -- Button hover effect
+            checkButton.MouseEnter:Connect(function()
+                TweenObject(checkButton, {BackgroundColor3 = Color3.fromRGB(0, 140, 220)}, 0.2)
+            end)
+            
+            checkButton.MouseLeave:Connect(function()
+                TweenObject(checkButton, {BackgroundColor3 = Color3.fromRGB(0, 162, 255)}, 0.2)
+            end)
+        end
+        
+        -- Function to create the main window after authentication
+        local function createMainWindow()
+            return createWindowInternal(config)
+        end
+        
+        -- Show key screen first
+        showKeyScreen()
+        
+        -- Return a placeholder that will be replaced
+        return {}
+    else
+        -- No key system, create window directly
+        return createWindowInternal(config)
+    end
+end
+
+-- Internal function to create the actual window
+local function createWindowInternal(config)
     local window = setmetatable({}, Window)
     
     -- Apply theme
