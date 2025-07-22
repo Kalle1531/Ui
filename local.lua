@@ -1025,12 +1025,15 @@ function Window:CreateTab(name)
         
         CreateCorner(self.Theme.CornerRadius):Clone().Parent = dropdownButton
         
-        local dropdownList = Instance.new("Frame")
-        dropdownList.Size = UDim2.new(0, 150, 0, #options * 25) -- Start with fixed width
+        local dropdownList = Instance.new("ScrollingFrame")
+        dropdownList.Size = UDim2.new(0, 150, 0, math.min(#options * 25, 150)) -- Max height 150px
         dropdownList.BackgroundColor3 = self.Theme.BackgroundColor
         dropdownList.BorderSizePixel = 0
         dropdownList.Visible = false
         dropdownList.ZIndex = 1000
+        dropdownList.ScrollBarThickness = 6
+        dropdownList.ScrollBarImageColor3 = self.Theme.PrimaryColor
+        dropdownList.CanvasSize = UDim2.new(0, 0, 0, #options * 25)
         dropdownList.Parent = self.ScreenGui
         
         CreateCorner(self.Theme.CornerRadius):Clone().Parent = dropdownList
@@ -1049,30 +1052,34 @@ function Window:CreateTab(name)
         
         for i, option in ipairs(options) do
             local optionButton = Instance.new("TextButton")
-            optionButton.Size = UDim2.new(1, 0, 0, 25)
-            optionButton.BackgroundColor3 = Color3.fromRGB(55, 55, 55)
+            optionButton.Size = UDim2.new(1, -6, 0, 25) -- Account for scrollbar
+            optionButton.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+            optionButton.BackgroundTransparency = 0 -- Ensure fully opaque
             optionButton.BorderSizePixel = 0
             optionButton.Text = option
-            optionButton.TextColor3 = Color3.fromRGB(255, 255, 255) -- Ensure white text
+            optionButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+            optionButton.TextTransparency = 0 -- Ensure text is fully visible
             optionButton.Font = self.Theme.Font
             optionButton.TextSize = 14
-            optionButton.TextStrokeTransparency = 0.8
-            optionButton.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+            optionButton.TextScaled = false
             optionButton.LayoutOrder = i
             optionButton.Parent = dropdownList
             
+            -- Add corner radius
+            CreateCorner(4):Clone().Parent = optionButton
+            
             -- Add border for better visibility
-            local stroke = CreateStroke(Color3.fromRGB(80, 80, 80), 1)
+            local stroke = CreateStroke(Color3.fromRGB(100, 100, 100), 1)
             stroke.Parent = optionButton
             
-            print("[Dropdown] Created button", i, ":", option, "Size:", optionButton.Size)
+            print("[Dropdown] Created button", i, ":", option, "Visible:", optionButton.Visible, "Transparency:", optionButton.BackgroundTransparency)
             
             optionButton.MouseEnter:Connect(function()
                 TweenObject(optionButton, {BackgroundColor3 = self.Theme.PrimaryColor}, 0.2)
             end)
             
             optionButton.MouseLeave:Connect(function()
-                TweenObject(optionButton, {BackgroundColor3 = Color3.fromRGB(55, 55, 55)}, 0.2)
+                TweenObject(optionButton, {BackgroundColor3 = Color3.fromRGB(70, 70, 70)}, 0.2)
             end)
             
             optionButton.MouseButton1Click:Connect(function()
@@ -1091,7 +1098,8 @@ function Window:CreateTab(name)
                 local buttonPos = dropdownButton.AbsolutePosition
                 local buttonSize = dropdownButton.AbsoluteSize
                 dropdownList.Position = UDim2.new(0, buttonPos.X, 0, buttonPos.Y + buttonSize.Y + 2)
-                dropdownList.Size = UDim2.new(0, buttonSize.X, 0, #options * 25)
+                dropdownList.Size = UDim2.new(0, math.max(buttonSize.X, 150), 0, math.min(#options * 25, 150))
+                dropdownList.CanvasSize = UDim2.new(0, 0, 0, #options * 25)
                 dropdownList.Visible = true
             end
         end)
