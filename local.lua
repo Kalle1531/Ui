@@ -1671,7 +1671,7 @@ local function createWindowInternal(config)
     window.ScreenGui = screenGui
     window.MainFrame = mainFrame
     window.TabContainer = tabContainer
-    window.ContentContainer = contentContainer
+    window.ContentFrame = contentContainer
     window.Tabs = {}
     window.TabOrder = {}
     window.ActiveTab = nil
