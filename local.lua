@@ -1015,12 +1015,14 @@ function Window:CreateTab(name)
         local dropdownButton = Instance.new("TextButton")
         dropdownButton.Size = UDim2.new(0.5, -20, 0, 25)
         dropdownButton.Position = UDim2.new(0.5, 5, 0, 5)
-        dropdownButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+        dropdownButton.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
         dropdownButton.BorderSizePixel = 0
-        dropdownButton.Text = options[1] or "Select..."
-        dropdownButton.TextColor3 = self.Theme.TextColor
+        dropdownButton.Text = tostring(options[1] or "Select...")
+        dropdownButton.TextColor3 = Color3.fromRGB(255, 255, 255) -- Ensure white text
+        dropdownButton.TextTransparency = 0 -- Ensure text is visible
         dropdownButton.Font = self.Theme.Font
         dropdownButton.TextSize = 12
+        dropdownButton.TextScaled = false
         dropdownButton.Parent = dropdownFrame
         
         CreateCorner(self.Theme.CornerRadius):Clone().Parent = dropdownButton
@@ -1047,9 +1049,6 @@ function Window:CreateTab(name)
         
         local selectedValue = options[1]
         
-        print("[Dropdown] Creating dropdown with", #options, "options")
-        print("[Dropdown] List size:", dropdownList.Size)
-        
         for i, option in ipairs(options) do
             local optionButton = Instance.new("TextButton")
             optionButton.Size = UDim2.new(1, -6, 0, 25) -- Account for scrollbar
@@ -1072,8 +1071,6 @@ function Window:CreateTab(name)
             local stroke = CreateStroke(Color3.fromRGB(100, 100, 100), 1)
             stroke.Parent = optionButton
             
-            print("[Dropdown] Created button", i, ":", option, "Visible:", optionButton.Visible, "Transparency:", optionButton.BackgroundTransparency)
-            
             optionButton.MouseEnter:Connect(function()
                 TweenObject(optionButton, {BackgroundColor3 = self.Theme.PrimaryColor}, 0.2)
             end)
@@ -1084,7 +1081,7 @@ function Window:CreateTab(name)
             
             optionButton.MouseButton1Click:Connect(function()
                 selectedValue = option
-                dropdownButton.Text = option
+                dropdownButton.Text = tostring(option)
                 dropdownList.Visible = false
                 if callback then callback(option) end
             end)
