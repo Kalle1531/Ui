@@ -784,7 +784,9 @@ function Window:CreateTab(name)
     end)
     
     tabButton.MouseEnter:Connect(function()
-        TweenObject(tabButton, {BackgroundColor3 = self.Theme.PrimaryColor}, 0.2)
+        if self.ActiveTab ~= name then
+            TweenObject(tabButton, {BackgroundColor3 = Color3.fromRGB(80, 80, 80)}, 0.2)
+        end
     end)
     
     tabButton.MouseLeave:Connect(function()
@@ -1456,10 +1458,14 @@ function Window:CreateTab(name)
 end
 
 function Window:SwitchTab(tabName)
-    -- Hide all tabs
+    if self.ActiveTab == tabName then return end -- Already active
+    
+    -- Hide all tabs and reset their colors
     for name, tab in pairs(self.Tabs) do
         tab.Content.Visible = false
-        TweenObject(tab.Button, {BackgroundColor3 = self.Theme.SecondaryColor}, 0.2)
+        if name ~= tabName then
+            TweenObject(tab.Button, {BackgroundColor3 = self.Theme.SecondaryColor}, 0.2)
+        end
     end
     
     -- Show selected tab
