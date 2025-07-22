@@ -1026,13 +1026,12 @@ function Window:CreateTab(name)
         CreateCorner(self.Theme.CornerRadius):Clone().Parent = dropdownButton
         
         local dropdownList = Instance.new("Frame")
-        dropdownList.Size = UDim2.new(0.5, -20, 0, #options * 25)
-        dropdownList.Position = UDim2.new(0.5, 5, 1, 5)
+        dropdownList.Size = UDim2.new(0, dropdownButton.AbsoluteSize.X, 0, #options * 25)
         dropdownList.BackgroundColor3 = self.Theme.BackgroundColor
         dropdownList.BorderSizePixel = 0
         dropdownList.Visible = false
-        dropdownList.ZIndex = 10
-        dropdownList.Parent = dropdownFrame
+        dropdownList.ZIndex = 1000
+        dropdownList.Parent = self.ScreenGui
         
         CreateCorner(self.Theme.CornerRadius):Clone().Parent = dropdownList
         CreateStroke(self.Theme.AccentColor, 1):Clone().Parent = dropdownList
@@ -1072,7 +1071,45 @@ function Window:CreateTab(name)
         end
         
         dropdownButton.MouseButton1Click:Connect(function()
-            dropdownList.Visible = not dropdownList.Visible
+            if dropdownList.Visible then
+                dropdownList.Visible = false
+            else
+                -- Position dropdown list below the button
+                local buttonPos = dropdownButton.AbsolutePosition
+                local buttonSize = dropdownButton.AbsoluteSize
+                dropdownList.Position = UDim2.new(0, buttonPos.X, 0, buttonPos.Y + buttonSize.Y + 2)
+                dropdownList.Size = UDim2.new(0, buttonSize.X, 0, #options * 25)
+                dropdownList.Visible = true
+            end
+        end)
+        
+        -- Close dropdown when clicking elsewhere
+        local clickConnection
+        dropdownList:GetPropertyChangedSignal("Visible"):Connect(function()
+            if dropdownList.Visible then
+                clickConnection = UserInputService.InputBegan:Connect(function(input)
+                    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                        local mousePos = UserInputService:GetMouseLocation()
+                        local listPos = dropdownList.AbsolutePosition
+                        local listSize = dropdownList.AbsoluteSize
+                        local buttonPos = dropdownButton.AbsolutePosition
+                        local buttonSize = dropdownButton.AbsoluteSize
+                        
+                        -- Check if click is outside dropdown list and button
+                        if not (mousePos.X >= listPos.X and mousePos.X <= listPos.X + listSize.X and
+                               mousePos.Y >= listPos.Y and mousePos.Y <= listPos.Y + listSize.Y) and
+                           not (mousePos.X >= buttonPos.X and mousePos.X <= buttonPos.X + buttonSize.X and
+                               mousePos.Y >= buttonPos.Y and mousePos.Y <= buttonPos.Y + buttonSize.Y) then
+                            dropdownList.Visible = false
+                        end
+                    end
+                end)
+            else
+                if clickConnection then
+                    clickConnection:Disconnect()
+                    clickConnection = nil
+                end
+            end
         end)
         
         self.Tabs[name].ElementCount = self.Tabs[name].ElementCount + 1
